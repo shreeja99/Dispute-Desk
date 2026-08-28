@@ -1,3 +1,5 @@
+<div align="center">
+
 # 🛡️ Dispute-Desk
 
 **AI-assisted dispute decision system for merchants — tells you honestly whether to fight a chargeback, and shows its work.**
@@ -5,6 +7,8 @@
 Built for **Razorpay AI Buildathon 2026** — Track 02: AI Risk Manager
 
 ![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white) ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Supabase-3ECF8E?logo=supabase&logoColor=white) ![LLM](https://img.shields.io/badge/LLM-Groq%20gpt--oss--120b-F55036) ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+
+</div>
 
 ---
 
@@ -304,6 +308,25 @@ Dispute-Desk/
 ├── README.md
 └── .gitignore
 ```
+
+---
+
+## Evaluation
+
+Run against **100 synthetic disputes** with known ground-truth labels (`GET /evaluate?count=100`):
+
+| Metric | Result |
+|---|---|
+| Total cases | 100 |
+| Auto-decided (Fight/Drop) | 56 |
+| Sent to Human Review | 44 |
+| **Accuracy on auto-decided cases** | **100%** |
+| False-fight rate | 0% |
+| False-drop rate | 0% |
+
+> The system deliberately defers 44% of cases to human review — mostly disputes exceeding the ₹50,000 forced-review threshold, or with evidence completeness in the 40-80% uncertain zone. On the cases it *does* auto-decide, it was correct every time in this run. This reflects a conservative design choice: the system would rather say "I'm not sure" than guess wrong on a money decision — and that tradeoff (coverage vs. confidence) is itself a tunable policy value, not a fixed limit.
+>
+> ⚠️ All evaluation is run against a synthetic dataset — we don't have access to real Razorpay merchant data, and we say so upfront rather than hiding it.
 
 ---
 
