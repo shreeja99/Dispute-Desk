@@ -1,26 +1,26 @@
-from app.db import supabase
+from app.db import supabase, safe_execute
 from app.services.evidence_engine import evidence_engine
 
 
 class DecisionEngine:
-    """
-    Deterministic decision layer. Takes the Evidence Engine's completeness
-    score plus policy thresholds (from DB, not hardcoded) and produces
-    one of three verdicts: FIGHT, DROP, or HUMAN_REVIEW.
-
-    This is the core explainability requirement: the money-affecting
-    decision is made by transparent rules, not an LLM.
-    """
+    def __init__(self):
+        self._policy_cache = None
 
     def _get_active_policy(self) -> dict:
-        result = supabase.table("decision_policy") \
+        if self._policy_cache is not None:
+            return self._policy_cache
+
+        query = supabase.table("decision_policy") \
             .select("*") \
             .eq("is_active", True) \
-            .single() \
-            .execute()
+            .single()
+
+        result = safe_execute(query)
 
         if not result.data:
             raise ValueError("No active decision policy found")
+
+        self._policy_cache = result.data
         return result.data
 
     def decide(self, network: str, reason_code: str, available_evidence: list, amount: float) -> dict:
@@ -29,7 +29,6 @@ class DecisionEngine:
 
         score = evidence_result["completeness_score"]
 
-        # High-value disputes always go to human review, regardless of score.
         if amount >= policy["min_amount_for_auto_decision"]:
             verdict = "HUMAN_REVIEW"
             reason = f"Amount ₹{amount} meets/exceeds the ₹{policy['min_amount_for_auto_decision']} auto-review threshold, regardless of evidence score."
