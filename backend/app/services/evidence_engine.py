@@ -1,23 +1,27 @@
-from app.db import supabase
+from app.db import supabase, safe_execute
 
 
 class EvidenceEngine:
-    """
-    Deterministic, data-driven. All reason codes and suggested evidence
-    documents are real, sourced from Razorpay's published dispute
-    documentation (stored in Supabase, not hardcoded in this file).
-    """
+    def __init__(self):
+        self._cache = {}
 
     def _get_reason_config(self, network: str, reason_code: str) -> dict:
-        result = supabase.table("reason_code_config") \
+        cache_key = (network, reason_code)
+        if cache_key in self._cache:
+            return self._cache[cache_key]
+
+        query = supabase.table("reason_code_config") \
             .select("*") \
             .eq("network", network) \
             .eq("reason_code", reason_code) \
-            .single() \
-            .execute()
+            .single()
+
+        result = safe_execute(query)
 
         if not result.data:
             raise ValueError(f"No config found for {network} {reason_code}")
+
+        self._cache[cache_key] = result.data
         return result.data
 
     def assess(self, network: str, reason_code: str, available_evidence: list) -> dict:
