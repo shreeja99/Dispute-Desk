@@ -1,5 +1,5 @@
 <div align="center">
-# 🛡️ Dispute-Desk
+<b> 🛡️ Dispute-Desk </b>
 
 **AI-assisted dispute decision system for merchants — tells you honestly whether to fight a chargeback, and shows its work.**
 
