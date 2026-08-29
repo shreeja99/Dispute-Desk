@@ -7,7 +7,6 @@ Built for **Razorpay AI Buildathon 2026** — Track 02: AI Risk Manager
 
 ![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white) ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Supabase-3ECF8E?logo=supabase&logoColor=white) ![LLM](https://img.shields.io/badge/LLM-Groq%20gpt--oss--120b-F55036) ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 
-
 </div>
 ---
 
@@ -29,9 +28,12 @@ Built for **Razorpay AI Buildathon 2026** — Track 02: AI Risk Manager
 
 When a customer disputes a payment, Razorpay already gives merchants a dashboard to view the dispute and upload evidence. What's missing is the layer that actually **thinks** for the merchant — nobody tells them, honestly, whether a dispute is even worth fighting.
 
-Dispute-Desk is a decision-support system, not a chargeback-writing chatbot. Given a disputed transaction, it identifies the real evidence required for that dispute's reason code (sourced from Razorpay's own published documentation), checks what the merchant actually has, and returns one of three honest verdicts — **Fight / Drop / Human Review** — with a plain-language reason. If it's worth fighting, an LLM drafts a reply letter strictly grounded in the confirmed evidence. Every step is logged to a full audit trail.
+Dispute-Desk is a decision-support system, not a chargeback-writing chatbot. Given a disputed transaction, it identifies the real evidence required for that dispute's reason code (sourced from Razorpay's own published documentation), checks what the merchant actually has, and returns one of three honest verdicts — **Fight / Drop / Human Review** — with a plain-language reason. If it's worth fighting, an LLM drafts a reply letter strictly grounded in the confirmed evidence. Every step is logged to a full audit trail. Merchants can also log a dispute by voice, through a short back-and-forth conversation with the system, instead of filling in a form by hand.
 
 **Core principle:** the system is built to be honest, not to maximize wins. It will actively recommend dropping a weak case.
+
+**Live backend:** `https://dispute-desk.onrender.com` ([API docs](https://dispute-desk.onrender.com/docs))
+> Note: hosted on Render's free tier, which spins down after inactivity — the first request after idle time may take 30-50 seconds to respond.
 
 ---
 
@@ -155,8 +157,14 @@ flowchart LR
 | GET | `/synthetic-dataset?count=N` | Generate N labeled synthetic disputes for testing/evaluation |
 | GET | `/evidence-assessment/{network}/{reason_code}?available=...` | Test the Evidence Engine directly |
 | GET | `/decision/{network}/{reason_code}?amount=&available=` | Test the Decision Engine directly |
+| GET | `/evaluate?count=N` | Run a batch evaluation against N synthetic disputes, return accuracy/false-fight/false-drop metrics |
+| GET | `/disputes/?user_id=&status=` | List disputes, optionally filtered by owner or status |
+| GET | `/disputes/{dispute_id}` | Full detail for one dispute: record, evidence, decision, letter status |
 | POST | `/disputes/` | Create a real dispute — runs the full pipeline (evidence → decision → audit → LLM draft if FIGHT) |
 | GET | `/disputes/{dispute_id}/audit-trail` | Retrieve the full audit trail for a dispute |
+| POST | `/voice/transcribe` | Upload an audio clip, get back the transcribed text (Groq Whisper) |
+| POST | `/voice/converse` | Send the conversation so far, get back a follow-up question or the completed structured dispute fields |
+| POST | `/voice/speak` | Send text, get back audio spoken in the merchant's own cloned voice (Cartesia) |
 
 ---
 
@@ -189,6 +197,7 @@ erDiagram
         text currency
         timestamp deadline
         text status
+        uuid user_id
     }
     EVIDENCE_RECORDS {
         uuid id PK
@@ -329,7 +338,31 @@ Run against **100 synthetic disputes** with known ground-truth labels (`GET /eva
 
 ---
 
+## What's Real vs. Mocked
+
+Stated plainly, because a demo that blurs this isn't worth trusting.
+
+| Real | Mocked / Synthetic |
+|---|---|
+| Reason codes, titles, and evidence requirements (38 codes, 6 networks) | Individual dispute transactions — we have no access to real merchant/customer data, and using real data would be a privacy problem even if we did |
+| The Evidence Engine and Decision Engine (deterministic, live-tested) | The 100-case evaluation batch (synthetic, but with known ground truth so accuracy is actually measurable) |
+| The LLM call for letter drafting (real Groq API, real model) | The letter's persuasive quality — it's a first draft for merchant review, not a guaranteed-win submission |
+| The full audit trail (real DB writes, retrievable per dispute) | — |
+| Speech-to-text, multi-turn conversational extraction, text-to-speech (all real API calls, tested end-to-end with recorded audio) | — |
+| Google OAuth (real Supabase provider, real Google Cloud OAuth client) | — |
+| The deployed backend at `dispute-desk.onrender.com` | — |
+
+## A Bug We Caught and Fixed
+
+The voice extraction service initially returned `"reason_code": "UPI 1064"` instead of `"1064"` — it had folded the network name into the code itself. This wasn't cosmetic: the Evidence Engine looks up records by an exact `network` + `reason_code` match, so this bug would have silently broken every voice-logged dispute at the lookup step, while looking completely fine in a demo that only checked the top-level response. Caught by testing the full multi-turn conversation, not just a single-turn stub, and fixed by giving the LLM the network and code as separate labeled fields in its reference data instead of one combined string. Tested again against the same conversation to confirm the fix, before moving on.
+
+## A Deliberate Tradeoff, Stated Honestly
+
+Row Level Security is disabled on our Supabase tables. This isn't an oversight — every write and read in this system goes through our backend's service-role key, which bypasses RLS regardless of whether it's turned on, so enabling it would add configuration overhead without adding real protection in our current architecture. In a production deployment where the frontend ever talks to Supabase directly (it currently doesn't), this would need to change. Listed here instead of hidden, because a security tradeoff nobody mentions is worse than one that's on the record.
+
 ## Assumptions & Known Limitations
+
+
 
 | Area | Assumption | Impact |
 |---|---|---|
@@ -340,6 +373,11 @@ Run against **100 synthetic disputes** with known ground-truth labels (`GET /eva
 | Row Level Security | Disabled on Supabase tables | Acceptable since all access goes through the backend's service role key; would be enabled for production |
 | Learning loop | System does not currently learn from real outcomes | Listed as future work, not oversold as present capability |
 
+## Sources
+
+- [Submit Evidence — Razorpay Docs](https://razorpay.com/docs/payments/disputes/submit-evidence/) — the 38 real reason codes, titles, and suggested evidence documents seeded into `reason_code_config` come directly from this page
+- [Disputes — Dashboard Actions — Razorpay Docs](https://razorpay.com/docs/payments/disputes/dashboard/) — confirms the current dispute flow is manual dashboard/API upload, with no decision-support layer
+- [Chargeback Fees & Penalties — Razorpay Docs](https://razorpay.com/docs/payments/disputes/chargeback-fees-and-penalties/) — confirms missing the response window results in an automatic loss, motivating why an honest fight/drop verdict matters
+
 ---
 
-Built for Razorpay AI Buildathon 2026
