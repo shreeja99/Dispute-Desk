@@ -145,7 +145,7 @@ flowchart LR
 |---|---|
 | **Purpose** | Simple, plain-language dashboard for a non-technical shop owner to see disputes and act on them |
 | **Tech** | React, Vite, Tailwind |
-| **Key screens** | Landing → How It Works → My Disputes → Dispute Detail → Needs My Attention |
+| **Key screens** | Homepage → Sign in → My Disputes → Dispute Detail → Needs My Attention |
 
 ---
 
