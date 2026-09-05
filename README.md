@@ -3,12 +3,11 @@
 
 **AI-assisted dispute decision system for merchants — tells you honestly whether to fight a chargeback, and shows its work.**
 
-Built for **Razorpay AI Buildathon 2026** — Track 02: AI Risk Manager
+Track 02: AI Risk Manager
 
 ![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white) ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Supabase-3ECF8E?logo=supabase&logoColor=white) ![LLM](https://img.shields.io/badge/LLM-Groq%20gpt--oss--120b-F55036) ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 
 </div>
----
 
 ## Table of Contents
 
