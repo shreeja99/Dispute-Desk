@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { Inbox, Bell, Archive, LogOut, Search, PlusCircle, UserCircle, type LucideIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import {
@@ -28,6 +28,7 @@ export function AppShell({
   children: ReactNode;
 }) {
   const navigate = useNavigate();
+  const pathname = useLocation().pathname;
   const [loggingOut, setLoggingOut] = useState(false);
 
   const logOut = async () => {
@@ -51,8 +52,12 @@ export function AppShell({
               <Link
                 key={to}
                 to={to}
-                activeOptions={{ exact: to === "/dashboard" }}
-                className="relative flex shrink-0 items-center gap-2.5 rounded-md border-b-2 border-transparent px-2.5 py-2.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground data-[status=active]:border-primary-dark data-[status=active]:bg-primary data-[status=active]:font-semibold data-[status=active]:text-primary-foreground data-[status=active]:shadow-sm sm:px-3"
+                activeOptions={{ exact: true }}
+                className={`relative flex shrink-0 items-center gap-2.5 rounded-md border-b-2 px-2.5 py-2.5 text-[13px] font-medium transition-colors sm:px-3 ${
+                  to === "/dashboard" && (pathname === "/dashboard" || pathname.startsWith("/disputes/")) || to !== "/dashboard" && pathname === to
+                    ? "border-primary-dark bg-primary font-semibold text-primary-foreground shadow-sm hover:bg-primary"
+                    : "border-transparent text-muted-foreground hover:bg-secondary hover:text-foreground"
+                }`}
               >
                 <Icon className="size-4 shrink-0 stroke-[2.25]" />
                 <span className="hidden sm:inline">{label}</span>
