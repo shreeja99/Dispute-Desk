@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
-import { restoreSupabaseSessionFromUrl, supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/account")({
   head: () => ({
@@ -32,14 +32,11 @@ function AccountPage() {
     const applyUser = (nextUser: User | null) => {
       setUser(nextUser);
       setEmail(nextUser?.email ?? "");
-      setName(nextUser?.user_metadata?.full_name ?? nextUser?.user_metadata?.name ?? "");
+      setName(nextUser?.user_metadata?.["full_name"] ?? nextUser?.user_metadata?.["name"] ?? "");
       setProvider(nextUser?.app_metadata?.provider ?? (nextUser ? "Email" : ""));
     };
 
-    void restoreSupabaseSessionFromUrl().catch((error: unknown) => {
-      if (active) setAuthError(error instanceof Error ? error.message : "Could not restore the sign-in session.");
-      return null;
-    }).then(() => supabase.auth.getSession()).then(({ data, error }) => {
+    void supabase.auth.getSession().then(({ data, error }) => {
       if (!active) return;
       if (error) setAuthError(error.message);
       applyUser(data.session?.user ?? null);

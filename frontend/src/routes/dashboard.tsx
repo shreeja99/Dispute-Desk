@@ -5,9 +5,8 @@ import { DisputeCard } from "@/components/DisputeCard";
 import { InfoTooltip } from "@/components/InfoTooltip";
 import { disputes as demoDisputes, type Dispute, type Verdict } from "@/lib/disputes";
 import { fetchDisputes } from "@/lib/dispute-api";
-import { restoreSupabaseSessionFromUrl, supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
-
+import { supabase } from "@/integrations/supabase/client";
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
     meta: [
@@ -33,7 +32,7 @@ function DashboardPage() {
 
   useEffect(() => {
     let active = true;
-    void restoreSupabaseSessionFromUrl().catch(() => null).then(() => supabase.auth.getSession()).then(({ data }) => {
+    void supabase.auth.getSession().then(({ data }) => {
       if (data.session) window.localStorage.removeItem("dispute-desk-demo");
       return fetchDisputes(data.session?.user.id);
     }).then((remote) => {
