@@ -13,13 +13,6 @@ export type CreateDisputeInput = {
   evidence: string[];
 };
 
-export type ReasonCodeEntry = {
-  network: string;
-  reason_code: string;
-  title: string;
-  suggested_evidence: string[];
-};
-
 export type VoiceComplete = {
   status: "complete";
   network: string;
@@ -43,10 +36,13 @@ const reasonLabels: Record<string, string> = {
 
 const evidenceLabels: Record<string, string> = {
   "Proof of delivery": "Delivery confirmation",
+  "Proof of service/product delivery": "Delivery confirmation",
   "Shipping carrier tracking": "Courier tracking record",
   "Order confirmation": "Order details",
   "Customer communication log": "Messages with the customer",
+  "Customer interaction showcasing product/service related enquiries": "Messages with the customer",
   "Refund policy acceptance": "Customer agreed to your refund policy",
+  "Terms & Conditions showcasing refund & fulfillment policies": "Customer agreed to your refund policy",
   "Device / IP match at checkout": "Customer's device matched at checkout",
   "3DS authentication record": "Bank's one-time password check",
   "AVS / CVV match": "Card details matched at payment",
@@ -65,7 +61,6 @@ const evidenceLabels: Record<string, string> = {
   "Booking confirmation": "Booking confirmation",
   "Cancellation notice sent to customer": "Cancellation notice you sent",
   "Terms acceptance": "Customer agreed to your terms",
-  "other": "Other (describe it yourself)",
 };
 
 function messageFromError(error: unknown) {
@@ -202,11 +197,6 @@ export async function fetchDisputes(userId?: string) {
   return rows.map((item, index) => normalizeDispute(item, index));
 }
 
-export async function fetchReasonCodes(): Promise<ReasonCodeEntry[]> {
-  const response = await apiFetch("/reason-codes/");
-  return (await response.json()) as ReasonCodeEntry[];
-}
-
 export async function fetchDispute(id: string) {
   const response = await apiFetch(`/disputes/${encodeURIComponent(id)}`);
   return normalizeDispute(await response.json());
@@ -216,19 +206,7 @@ function backendDeadline(deadline: string) {
   return deadline.includes("T") ? deadline : `${deadline}T23:59:00`;
 }
 
-export type CreateDisputeResult = {
-  dispute_id: string;
-  decision: {
-    verdict: string;
-    reason: string;
-    evidence_assessment: unknown;
-    amount: number;
-    policy_used: string;
-  };
-  drafted_letter: string | null;
-};
-
-export async function createDispute(input: CreateDisputeInput, userId?: string): Promise<CreateDisputeResult> {
+export async function createDispute(input: CreateDisputeInput, userId?: string) {
   const response = await apiFetch(`/disputes/${accountQuery(userId)}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -244,7 +222,7 @@ export async function createDispute(input: CreateDisputeInput, userId?: string):
       })),
     }),
   });
-  return (await response.json()) as CreateDisputeResult;
+  return normalizeDispute(await response.json());
 }
 
 export async function transcribeVoice(audio: Blob) {
