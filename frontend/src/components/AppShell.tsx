@@ -53,9 +53,9 @@ export function AppShell({
                 key={to}
                 to={to}
                 activeOptions={{ exact: true }}
-                className={`relative flex shrink-0 items-center gap-2.5 rounded-md border-b-2 px-2.5 py-2.5 text-[13px] font-medium transition-colors hover:bg-secondary sm:px-3 ${
+                className={`relative flex shrink-0 items-center gap-2.5 rounded-md border-b-2 px-2.5 py-2.5 text-[13px] font-medium transition-colors sm:px-3 ${
                   pathname === to
-                    ? "border-primary-dark bg-primary font-semibold text-primary-foreground shadow-sm"
+                    ? "border-primary-dark bg-primary font-semibold text-primary-foreground shadow-sm hover:bg-primary focus:bg-primary"
                     : "border-transparent text-muted-foreground hover:text-foreground"
                 }`}
               >
