@@ -84,7 +84,7 @@ function AccountPage() {
           <div>
             <h2 className="text-[20px] font-bold tracking-tight">{loading ? "Loading account..." : name || (isGuest ? "Guest account" : "No active account")}</h2>
             <p className="mt-1 text-[14px] text-muted-foreground">
-              {loading ? "Checking session" : isGuest ? "Demo session" : "Sign in to view profile"}
+              {loading ? "Checking session" : user ? "Signed-in profile" : <Link to="/sign-in" className="text-primary hover:underline">Sign in to view profile</Link>}
             </p>
             {authError && <p className="mt-1 text-[13px] text-danger">{authError}</p>}
           </div>
