@@ -1,10 +1,11 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Check, Loader2, Mic, Square } from "lucide-react";
+import { ArrowLeft, Check, Copy, Loader2, Mic, Square, AlertTriangle, XCircle } from "lucide-react";
+import * as React from "react";
 import { useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { InfoTooltip } from "@/components/InfoTooltip";
 import { Button } from "@/components/ui/button";
-import { createDispute, converseVoice, evidenceLabels, messageFromError, reasonLabels, transcribeVoice, type CreateDisputeInput } from "@/lib/dispute-api";
+import { createDispute, converseVoice, evidenceLabels, fetchReasonCodes, messageFromError, reasonLabels, transcribeVoice, type CreateDisputeInput, type CreateDisputeResult, type ReasonCodeEntry } from "@/lib/dispute-api";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/log-dispute")({
@@ -21,10 +22,6 @@ export const Route = createFileRoute("/log-dispute")({
 type Mode = "type" | "say";
 type Stage = "input" | "confirm" | "sent";
 type ChatTurn = { role: "user" | "assistant"; content: string };
-
-const evidenceOptions = Object.keys(evidenceLabels);
-const networkOptions = ["UPI", "Visa", "Mastercard", "RuPay", "NetBanking"];
-const reasonOptions = Object.entries(reasonLabels);
 
 const initialForm: CreateDisputeInput = { transaction_id: "demo-transaction", network: "UPI", reason_code: "1064", amount: 0, deadline: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10), evidence: [] };
 
@@ -55,10 +52,37 @@ function LogDisputePage() {
   const [busy, setBusy] = useState(false);
   const [recording, setRecording] = useState(false);
   const [error, setError] = useState("");
+  const [result, setResult] = useState<CreateDisputeResult | null>(null);
+  const [reasonCodes, setReasonCodes] = useState<ReasonCodeEntry[]>([]);
+  const [reasonCodesLoading, setReasonCodesLoading] = useState(true);
+  const [reasonCodesError, setReasonCodesError] = useState("");
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 
   useEffect(() => () => recorderRef.current?.stop(), []);
+
+  useEffect(() => {
+    let active = true;
+    void fetchReasonCodes()
+      .then((entries) => {
+        if (active) setReasonCodes(entries);
+      })
+      .catch((reasonCodeError) => {
+        if (active) setReasonCodesError(messageFromError(reasonCodeError));
+      })
+      .finally(() => {
+        if (active) setReasonCodesLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const validReasons = reasonCodes.filter((entry) => entry.network === form.network);
+    if (reasonCodesLoading || !validReasons.length || validReasons.some((entry) => entry.reason_code === form.reason_code)) return;
+    update({ reason_code: validReasons[0]!.reason_code, evidence: [] });
+  }, [form.network, form.reason_code, reasonCodes, reasonCodesLoading]);
 
   const update = (patch: Partial<CreateDisputeInput>) => setForm((current) => ({ ...current, ...patch }));
   const toggleEvidence = (item: string) => update({ evidence: form.evidence.includes(item) ? form.evidence.filter((entry) => entry !== item) : [...form.evidence, item] });
@@ -102,7 +126,8 @@ function LogDisputePage() {
     setBusy(true); setError("");
     try {
       const { data } = await supabase.auth.getSession();
-      await createDispute(form, data.session?.user.id);
+      const response = await createDispute(form, data.session?.user.id);
+      setResult(response);
       setStage("sent");
     } catch (submitError) { setError(messageFromError(submitError)); } finally { setBusy(false); }
   };
@@ -110,10 +135,10 @@ function LogDisputePage() {
   return <AppShell title="Log a Dispute" intro={<p>Capture a payment reversal</p>}>
     <Link to="/dashboard" className="mb-5 inline-flex items-center gap-1.5 text-[14px] font-medium text-primary"><ArrowLeft className="size-4" /> Back to my disputes</Link>
     <div className="surface-card p-5 md:p-7">
-      {stage === "sent" ? <div className="py-10 text-center"><div className="mx-auto flex size-12 items-center justify-center rounded-full bg-success-soft text-success"><Check /></div><h2 className="mt-5 text-[22px] font-bold">Dispute logged</h2><p className="mx-auto mt-2 max-w-md text-[14px] leading-relaxed text-muted-foreground">Dispute details submitted.</p><Button onClick={() => void navigate({ to: "/dashboard" })} className="mt-7">Back to My Disputes</Button></div> : <>
+      {stage === "sent" ? <ResultScreen result={result} onDone={() => void navigate({ to: "/dashboard" })} /> : <>
         <div className="flex rounded-md border border-border p-1" role="tablist"><button onClick={() => setMode("say")} className={`flex-1 rounded px-3 py-2 text-[14px] font-medium ${mode === "say" ? "bg-accent text-accent-foreground" : "text-muted-foreground"}`}>Say it</button><button onClick={() => setMode("type")} className={`flex-1 rounded px-3 py-2 text-[14px] font-medium ${mode === "type" ? "bg-accent text-accent-foreground" : "text-muted-foreground"}`}>Type it</button></div>
         {mode === "say" && stage === "input" ? <div className="mt-6"><div className="rounded-md bg-secondary p-4 text-[14px] leading-relaxed text-muted-foreground">Describe the dispute.</div><div className="mt-6 flex flex-col items-center text-center"><button type="button" onClick={recording ? stopRecording : startRecording} disabled={busy} className={`flex size-24 items-center justify-center rounded-full text-primary-foreground shadow-sm transition-transform ${recording ? "bg-danger" : "bg-primary"}`} aria-label={recording ? "Stop recording" : "Tap and describe your dispute"}>{recording ? <Square className="size-7" /> : <Mic className="size-8" />}</button><p className="mt-4 text-[15px] font-semibold">{busy ? "Listening…" : recording ? "Tap again when you are done" : "Tap and describe your dispute"}</p><p className="mt-1 text-[13px] text-muted-foreground">Transcript appears below.</p></div>{chat.length > 0 && <div className="mt-8 flex flex-col gap-3">{chat.map((turn, index) => <div key={`${turn.role}-${index}`} className={`max-w-[85%] rounded-md px-4 py-3 text-[14px] leading-relaxed ${turn.role === "user" ? "self-end bg-primary text-primary-foreground" : "self-start bg-secondary text-foreground"}`}>{turn.content}</div>)}</div>}</div> : null}
-        {stage === "input" && mode === "type" ? <DisputeForm form={form} update={update} toggleEvidence={toggleEvidence} confidenceNote={confidenceNote} /> : null}
+        {stage === "input" && mode === "type" ? <DisputeForm form={form} update={update} toggleEvidence={toggleEvidence} confidenceNote={confidenceNote} reasonCodes={reasonCodes} loading={reasonCodesLoading} loadError={reasonCodesError} /> : null}
         {stage === "confirm" ? <Confirmation form={form} confidenceNote={confidenceNote} update={update} /> : null}
         {error && <p role="alert" className="mt-5 rounded-md bg-danger-soft p-3 text-[13px] text-danger">{error}</p>}
         {stage === "input" && mode === "type" ? <Button onClick={() => { setError(""); setStage("confirm"); }} className="mt-7 w-full sm:w-auto">Review what we captured</Button> : null}
@@ -123,7 +148,57 @@ function LogDisputePage() {
   </AppShell>;
 }
 
-function DisputeForm({ form, update, toggleEvidence, confidenceNote }: { form: CreateDisputeInput; update: (patch: Partial<CreateDisputeInput>) => void; toggleEvidence: (item: string) => void; confidenceNote: string }) {
+function ResultScreen({ result, onDone }: { result: CreateDisputeResult | null; onDone: () => void }) {
+  const [copied, setCopied] = useState(false);
+  if (!result) {
+    return <div className="py-10 text-center"><div className="mx-auto flex size-12 items-center justify-center rounded-full bg-success-soft text-success"><Check /></div><h2 className="mt-5 text-[22px] font-bold">Dispute logged</h2><Button onClick={onDone} className="mt-7">Back to My Disputes</Button></div>;
+  }
+
+  const verdict = result.decision.verdict;
+  const verdictStyles: Record<string, { bg: string; text: string; icon: React.ReactNode; label: string }> = {
+    FIGHT: { bg: "bg-success-soft", text: "text-success", icon: <Check className="size-6" />, label: "Fight this dispute" },
+    DROP: { bg: "bg-danger-soft", text: "text-danger", icon: <XCircle className="size-6" />, label: "Drop this dispute" },
+    HUMAN_REVIEW: { bg: "bg-warning-soft", text: "text-warning", icon: <AlertTriangle className="size-6" />, label: "Needs a closer look" },
+  };
+  const style = verdictStyles[verdict] ?? verdictStyles["HUMAN_REVIEW"]!;
+
+  const copyLetter = async () => {
+    if (!result.drafted_letter) return;
+    await navigator.clipboard.writeText(result.drafted_letter);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return <div className="py-6">
+    <div className="mx-auto flex max-w-lg flex-col items-center text-center">
+      <div className={`flex size-14 items-center justify-center rounded-full ${style.bg} ${style.text}`}>{style.icon}</div>
+      <h2 className={`mt-4 text-[22px] font-bold ${style.text}`}>{style.label}</h2>
+      <p className="mt-3 text-[14px] leading-relaxed text-muted-foreground">{result.decision.reason}</p>
+    </div>
+
+    {result.drafted_letter && (
+      <div className="mx-auto mt-7 max-w-2xl text-left">
+        <p className="text-[14px] font-semibold">Your draft reply</p>
+        <div className="mt-2 whitespace-pre-wrap rounded-md border border-border bg-secondary p-4 text-[14px] leading-relaxed">{result.drafted_letter}</div>
+        <Button variant="outline" onClick={() => void copyLetter()} className="mt-3">
+          <Copy className="size-4" /> {copied ? "Copied!" : "Copy Reply Letter"}
+        </Button>
+      </div>
+    )}
+
+    <div className="mt-8 flex justify-center">
+      <Button onClick={onDone}>Back to My Disputes</Button>
+    </div>
+  </div>;
+}
+
+function DisputeForm({ form, update, toggleEvidence, confidenceNote, reasonCodes, loading, loadError }: { form: CreateDisputeInput; update: (patch: Partial<CreateDisputeInput>) => void; toggleEvidence: (item: string) => void; confidenceNote: string; reasonCodes: ReasonCodeEntry[]; loading: boolean; loadError: string }) {
+  if (loading) return <div className="mt-7 rounded-md bg-secondary p-4 text-[14px] text-muted-foreground">Loading reason codes…</div>;
+  if (loadError) return <div className="mt-7 rounded-md bg-danger-soft p-4 text-[14px] text-danger">We could not load the payment networks and reason codes. Please try again later.</div>;
+  const networkOptions = [...new Set(reasonCodes.map((entry) => entry.network))];
+  const reasonOptions = reasonCodes.filter((entry) => entry.network === form.network).map((entry) => [entry.reason_code, entry.title] as const);
+  const selectedReason = reasonCodes.find((entry) => entry.network === form.network && entry.reason_code === form.reason_code);
+  const evidenceOptions = selectedReason?.suggested_evidence ?? [];
   return <div className="mt-7 grid gap-5 md:grid-cols-2"><label className="text-[14px] font-medium">Transaction reference<input value={form.transaction_id} onChange={(event) => update({ transaction_id: event.target.value })} className="mt-2 h-11 w-full rounded-md border border-input bg-background px-3 text-[14px] outline-none focus:ring-1 focus:ring-ring" placeholder="e.g. order-1042" />{confidenceNote && <small className="mt-1 block text-[13px] text-muted-foreground">{confidenceNote}</small>}</label><label className="text-[14px] font-medium">Payment network<InfoTooltip term="network" className="ml-1" /><select value={form.network} onChange={(event) => update({ network: event.target.value })} className="mt-2 h-11 w-full rounded-md border border-input bg-background px-3 text-[14px]"><option value="">Choose one</option>{networkOptions.map((network) => <option key={network}>{network}</option>)}</select></label><label className="text-[14px] font-medium">What did the customer say?<select value={form.reason_code} onChange={(event) => update({ reason_code: event.target.value })} className="mt-2 h-11 w-full rounded-md border border-input bg-background px-3 text-[14px]">{reasonOptions.map(([code, label]) => <option key={code} value={code}>{label}</option>)}</select></label><label className="text-[14px] font-medium">Amount in rupees<input type="number" min="1" value={form.amount || ""} onChange={(event) => update({ amount: Number(event.target.value) })} className="mt-2 h-11 w-full rounded-md border border-input bg-background px-3 text-[14px]" placeholder="5000" /></label><label className="text-[14px] font-medium">Respond by<InfoTooltip term="deadline" className="ml-1" /><input type="date" value={form.deadline} onChange={(event) => update({ deadline: event.target.value })} className="mt-2 h-11 w-full rounded-md border border-input bg-background px-3 text-[14px]" /></label><div className="md:col-span-2"><p className="text-[14px] font-medium">Proof you have <InfoTooltip term="evidence" className="ml-1" /></p><div className="mt-3 grid gap-2 sm:grid-cols-2">{evidenceOptions.map((item) => <label key={item} className="flex cursor-pointer items-start gap-3 rounded-md border border-border p-3 text-[14px] hover:bg-secondary"><input type="checkbox" checked={form.evidence.includes(item)} onChange={() => toggleEvidence(item)} className="mt-0.5 accent-primary" /><span>{evidenceLabels[item]}</span></label>)}</div></div></div>;
 }
 
