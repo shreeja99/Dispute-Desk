@@ -3,12 +3,13 @@ from app.services.evidence_engine import evidence_engine
 from app.services.decision_engine import decision_engine
 from app.services.evaluation_service import evaluation_service
 from app.data.synthetic_generator import generate_dataset
-from app.routers import disputes, voice
+from app.routers import disputes, voice, reason_codes
 
 app = FastAPI(title="Dispute-Desk API")
 
 app.include_router(disputes.router)
 app.include_router(voice.router)
+app.include_router(reason_codes.router)
 
 
 @app.get("/")
