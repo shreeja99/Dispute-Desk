@@ -1,7 +1,10 @@
 import time
+import logging
 from supabase import create_client, Client
-from app.config import SUPABASE_URL, SUPABASE_KEY
+from app.config import SUPABASE_URL, SUPABASE_KEY, validate_config
 
+logger = logging.getLogger(__name__)
+validate_config()
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
@@ -18,5 +21,6 @@ def safe_execute(query_builder, retries: int = 3, delay: float = 0.3):
             return query_builder.execute()
         except Exception as e:
             last_error = e
+            logger.warning("Supabase query failed on attempt %s/%s: %s", attempt + 1, retries, e)
             time.sleep(delay)
     raise last_error
