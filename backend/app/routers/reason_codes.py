@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from app.db import supabase, safe_execute
 
 router = APIRouter(prefix="/reason-codes", tags=["reason-codes"])
@@ -12,5 +12,11 @@ def list_reason_codes():
     of a hardcoded, potentially mismatched list.
     """
     query = supabase.table("reason_code_config").select("network, reason_code, title, suggested_evidence")
-    result = safe_execute(query)
-    return result.data
+    try:
+        result = safe_execute(query)
+        return result.data
+    except Exception:
+        raise HTTPException(
+            status_code=503,
+            detail="Reason-code data is temporarily unavailable.",
+        )
