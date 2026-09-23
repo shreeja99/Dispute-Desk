@@ -40,8 +40,13 @@ async def converse(conversation_history: str = Form(...)):
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="conversation_history must be valid JSON")
 
-    result = voice_extraction_service.process_turn(history)
-    return result
+    try:
+        return voice_extraction_service.process_turn(history)
+    except Exception:
+        raise HTTPException(
+            status_code=503,
+            detail="Voice conversation is temporarily unavailable because its data service could not be reached.",
+        )
 
 @router.post("/speak")
 async def speak(text: str = Form(...)):
